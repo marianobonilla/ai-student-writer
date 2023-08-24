@@ -2,8 +2,9 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 import os
 from .utils import extract_text_from_pdf
+from app import app
 
-app = Flask(__name__)
+#app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'app/uploads'
 app.config['ALLOWED_EXTENSIONS'] = {'pdf'}
 
@@ -31,3 +32,7 @@ def upload_file():
             return render_template('results.html', extracted_text = text)
     
     return render_template('upload.html')
+
+@app.route('/hello')
+def hello_world():
+    return 'Hello, world!'
