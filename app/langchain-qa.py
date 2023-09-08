@@ -9,6 +9,13 @@ from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.chains import RetrievalQA
 from langchain.document_loaders import PyPDFLoader
 
+from langchain.chat_models import ChatOpenAI
+from langchain.memory import ConversationTokenBufferMemory
+from langchain.chains import ConversationChain
+from langchain.chains import ConversationalRetrievalChain
+from langchain.memory import ConversationSummaryBufferMemory
+from langchain.schema.messages import AIMessage
+
 # Load environment variables
 dotenv.load_dotenv()
 
@@ -20,12 +27,34 @@ pinecone_index = os.getenv('PINECONE_INDEX_NAME')
 st.subheader('Generative Q&A with LangChain & Pinecone')
 
 # Initialize Pinecone and OpenAI
+embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
 pinecone.init(api_key=pinecone_api_key, environment=pinecone_env)
-llm = OpenAI(temperature=0, openai_api_key=openai_api_key)
+vectorstore = Pinecone.from_existing_index(pinecone_index, embeddings)
 
 # Create a Pinecone vector database from the existing index
-embeddings = OpenAIEmbeddings()
-vectordb = Pinecone.from_existing_index(index_name=pinecone_index, embedding=embeddings)
+llm = ChatOpenAI(
+    temperature=0.0,
+    model_name="gpt-3.5-turbo",
+    openai_api_key=openai_api_key)
+
+memory = ConversationSummaryBufferMemory(
+    llm=llm,
+    output_key='answer',
+    memory_key='chat_history',
+    return_messages=True)
+
+retriever = vectorstore.as_retriever()
+
+chain = ConversationalRetrievalChain.from_llm(
+    llm=llm,
+    memory=memory,
+    chain_type="stuff",
+    retriever=retriever,
+    return_source_documents=True,
+    get_chat_history=lambda h : h,
+    verbose=False)
+
+
 
 with st.sidebar:
     uploaded_file = st.file_uploader("Upload source document", type="pdf", label_visibility="collapsed")
@@ -45,27 +74,6 @@ send_button = st.button("Send")
 # Display the chat messages in a scrollable list
 # st.write('\n'.join(chat_messages))
 
-
-
-# index = pinecone.Index(pinecone_index)
-# query_response = index.query(
-#     namespace='example-namespace',
-#     top_k=10,
-#     include_values=True,
-#     include_metadata=True,
-#     vector=[0.1, 0.2, 0.3, 0.4],
-#     sparseVector={
-#         'indices': [10, 45, 16],
-#         'values':  [0.5, 0.5, 0.2]
-#     },
-#     filter={
-#         'genre': {'$in': ['physics','class','circuits']}
-#     }
-# )
-
-# print(query_response)
-
-
 if send_button:
     print("send button was hit", pinecone_index)
     chat_messages.append(query)
@@ -77,33 +85,30 @@ if send_button:
         st.warning(f"Please upload the document and provide the missing fields.")
     else:
         try:
-            # Save uploaded file temporarily to disk, load and split the file into pages, delete temp file
-            # with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-            #     tmp_file.write(source_doc.read())
-            # loader = PyPDFLoader(tmp_file.name)
-            # pages = loader.load_and_split()
-            # os.remove(tmp_file.name)
-            
-            # Generate embeddings for the pages, insert into Pinecone vector database, and expose the index in a retriever interface
-            # pinecone.init(api_key=pinecone_api_key, environment=pinecone_env)
-            # embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
-            # vectordb = Pinecone.from_documents(pages, embeddings, index_name=pinecone_index)
-            # retriever = vectordb.as_retriever()
-
-            # Initialize the OpenAI module, load and run the Retrieval Q&A chain
-            # llm = OpenAI(temperature=0, openai_api_key=openai_api_key)
-            # qa = RetrievalQA.from_chain_type(llm, chain_type="stuff", retriever=retriever)
-            # response = qa.run(query)
-            
-
-            # Create a retriever from the vector database
-            retriever = vectordb.as_retriever()
-
-            # Initialize and run the Retrieval Q&A chain
-            qa = RetrievalQA.from_chain_type(llm, chain_type="stuff", retriever=retriever)
-            response = qa.run(query)
-            
-            st.write(response)
-            st.success(response)
+            response = chain({"question": query})
+            ai_response = response['chat_history'][1].content # AIMessage.content
+            print(ai_response)
+            st.write(ai_response)
+            # st.success(response)
         except Exception as e:
             st.error(f"An error occurred: {e}")
+
+
+
+# Save uploaded file temporarily to disk, load and split the file into pages, delete temp file
+# with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+#     tmp_file.write(source_doc.read())
+# loader = PyPDFLoader(tmp_file.name)
+# pages = loader.load_and_split()
+# os.remove(tmp_file.name)
+
+# Generate embeddings for the pages, insert into Pinecone vector database, and expose the index in a retriever interface
+# pinecone.init(api_key=pinecone_api_key, environment=pinecone_env)
+# embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
+# vectordb = Pinecone.from_documents(pages, embeddings, index_name=pinecone_index)
+# retriever = vectordb.as_retriever()
+
+# Initialize the OpenAI module, load and run the Retrieval Q&A chain
+# llm = OpenAI(temperature=0, openai_api_key=openai_api_key)
+# qa = RetrievalQA.from_chain_type(llm, chain_type="stuff", retriever=retriever)
+# response = qa.run(query)
