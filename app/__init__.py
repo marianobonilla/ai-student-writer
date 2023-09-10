@@ -1,11 +1,11 @@
 from flask import Flask
 from .extensions import db, migrate
-from .config import Config
+from .config import config
 
 
 def create_app():
     app = Flask(__name__)
-    app.config.from_object(Config())
+    app.config.from_object(config)
     db.init_app(app)
     migrate.init_app(app, db)
 
