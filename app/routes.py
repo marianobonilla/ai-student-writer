@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
 from werkzeug.utils import secure_filename
-from .services.s3_service import upload_file_to_s3
+from app.services.s3_service import upload_file_to_s3
 import os
 from .utils import extract_text_from_pdf, extract_text_from_doc
 import app
@@ -9,6 +9,10 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 def init_app(app):
+    @app.route('/hello')
+    def hello_world():
+        return 'Hello, world!'
+    
     @app.route('/', methods=['GET', 'POST'])
     def upload_file():
         if request.method == 'POST':
@@ -34,10 +38,6 @@ def init_app(app):
                 return render_template('results.html', extracted_text = text)
         
         return render_template('upload.html')
-
-    @app.route('/hello')
-    def hello_world():
-        return 'Hello, world!'
 
     @app.route('/upload', methods=['GET', 'POST'])
     def upload_file_s3():
